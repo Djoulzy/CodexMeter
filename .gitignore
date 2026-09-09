@@ -12,6 +12,7 @@ xcuserdata/
 *.ipa
 *.dSYM.zip
 *.dSYM
+Codex Meter.app
 
 ## Playgrounds
 timeline.xctimeline
@@ -29,6 +30,7 @@ playground.xcworkspace
 # hence it is not needed unless you have added a package configuration file to your project
 # .swiftpm
 
+.DS_Store
 .build/
 
 # CocoaPods
