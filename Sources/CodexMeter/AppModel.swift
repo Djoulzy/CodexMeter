@@ -92,10 +92,11 @@ final class AppModel: ObservableObject {
             Task { await refresh() }
         }
     }
-    func chooseRulePath() -> String? {
+    func chooseRulePaths() -> [String] {
         let panel = NSOpenPanel(); panel.canChooseDirectories = true; panel.canChooseFiles = false
-        panel.message = "Choisissez le dossier d’un client ou d’un projet."
-        return panel.runModal() == .OK ? panel.url?.path : nil
+        panel.allowsMultipleSelection = true
+        panel.message = "Choisissez les dossiers à affecter au client."
+        return panel.runModal() == .OK ? panel.urls.map(\.path) : []
     }
     var filtered: [Consumption] {
         let start = period.start

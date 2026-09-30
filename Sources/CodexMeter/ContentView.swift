@@ -166,37 +166,96 @@ struct ClientsView: View {
     @EnvironmentObject var app: AppModel
     @State private var client = ""
     @State private var path = ""
+    @State private var selectedPaths: [String] = []
     @State private var editingID: UUID?
+    private var clients: [String] { Array(Set(app.settings.rules.map(\.client))).sorted() }
+    private var enteredPath: String { path.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var validPaths: [String] {
+        (selectedPaths + [enteredPath]).filter { $0.hasPrefix("/") || $0.hasPrefix("~/") }
+    }
+
+    private func normalized(_ value: String) -> String {
+        URL(fileURLWithPath: (value as NSString).expandingTildeInPath).standardizedFileURL.path
+    }
+
+    private func addPaths(_ paths: [String], to name: String, replacing id: UUID? = nil) {
+        let normalizedPaths = Array(Set(paths.map(normalized))).sorted()
+        guard !normalizedPaths.isEmpty else { return }
+        app.settings.rules.removeAll { rule in
+            rule.id == id || normalizedPaths.contains(normalized(rule.path))
+        }
+        app.settings.rules.append(contentsOf: normalizedPaths.map { ClientRule(client: name, path: $0) })
+        app.save()
+    }
+
+    private func resetForm() {
+        client = ""; path = ""; selectedPaths = []; editingID = nil
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Text("Un projet, un client").font(.largeTitle.bold())
-                Text("Associez un dossier à un client. Ses sous-dossiers sont inclus ; la règle la plus précise est prioritaire. Les worktrees Git sont rattachés au dépôt principal lorsqu’il est accessible.").foregroundStyle(.secondary)
+                Text("Un client, plusieurs dossiers").font(.largeTitle.bold())
+                Text("Affectez autant de dossiers que nécessaire à chaque client. Leurs sous-dossiers sont inclus ; la règle la plus précise est prioritaire. Les worktrees Git sont rattachés au dépôt principal lorsqu’il est accessible.").foregroundStyle(.secondary)
                 VStack(alignment: .leading, spacing: 14) {
-                    Text("Nouvelle affectation").font(.headline)
-                    TextField("Nom du client", text: $client).textFieldStyle(.roundedBorder)
+                    Text(editingID == nil ? "Nouvelle affectation" : "Modifier une affectation").font(.headline)
+                    HStack {
+                        TextField("Nom du client", text: $client).textFieldStyle(.roundedBorder)
+                        if !clients.isEmpty {
+                            Menu("Client existant") {
+                                ForEach(clients, id: \.self) { name in Button(name) { client = name } }
+                            }
+                        }
+                    }
                     HStack {
                         TextField("Chemin absolu du dossier", text: $path).textFieldStyle(.roundedBorder)
-                        Button("Choisir…") { if let chosen = app.chooseRulePath() { path = chosen } }
+                        Button("Choisir des dossiers…") {
+                            selectedPaths = Array(Set(selectedPaths + app.chooseRulePaths())).sorted()
+                        }
+                    }
+                    if !selectedPaths.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Dossiers sélectionnés").font(.caption).foregroundStyle(.secondary)
+                            ForEach(selectedPaths, id: \.self) { folder in
+                                HStack {
+                                    Text(folder).font(.callout).textSelection(.enabled)
+                                    Spacer()
+                                    Button { selectedPaths.removeAll { $0 == folder } } label: { Image(systemName: "xmark.circle") }
+                                        .help("Retirer de la sélection")
+                                }
+                            }
+                        }
                     }
                     HStack {
                         Spacer()
-                        Button(editingID == nil ? "Ajouter la règle" : "Enregistrer la règle") {
-                            let normalized = URL(fileURLWithPath: (path.trimmingCharacters(in: .whitespacesAndNewlines) as NSString).expandingTildeInPath).standardizedFileURL.path
-                            app.settings.rules.removeAll { $0.path == normalized || $0.id == editingID }
-                            app.settings.rules.append(ClientRule(client: client.trimmingCharacters(in: .whitespacesAndNewlines), path: normalized))
-                            app.save(); client = ""; path = ""; editingID = nil
+                        if editingID != nil { Button("Annuler") { resetForm() } }
+                        Button(editingID == nil ? "Affecter les dossiers" : "Enregistrer l’affectation") {
+                            addPaths(validPaths, to: client.trimmingCharacters(in: .whitespacesAndNewlines), replacing: editingID)
+                            resetForm()
                         }.buttonStyle(.borderedProminent)
-                            .disabled(client.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !(path.hasPrefix("/") || path.hasPrefix("~/")))
+                            .disabled(client.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || validPaths.isEmpty || (!enteredPath.isEmpty && !(enteredPath.hasPrefix("/") || enteredPath.hasPrefix("~/"))))
                     }
                 }.padding(22).card()
-                ForEach(app.settings.rules) { rule in
-                    HStack {
-                        Image(systemName: "folder.badge.person.crop").font(.title2).foregroundStyle(.blue)
-                        VStack(alignment: .leading, spacing: 5) { Text(rule.client).font(.headline); Text(rule.path).font(.callout).foregroundStyle(.secondary).textSelection(.enabled) }
-                        Spacer()
-                        Button("Modifier") { client = rule.client; path = rule.path; editingID = rule.id }
-                        Button(role: .destructive) { app.settings.rules.removeAll { $0.id == rule.id }; app.save() } label: { Image(systemName: "trash") }.help("Supprimer l’affectation")
+                ForEach(clients, id: \.self) { name in
+                    let rules = app.settings.rules.filter { $0.client == name }.sorted { $0.path < $1.path }
+                    VStack(alignment: .leading, spacing: 14) {
+                        HStack {
+                            Label(name, systemImage: "person.crop.circle").font(.headline)
+                            Text("\(rules.count) dossier(s)").font(.caption).foregroundStyle(.secondary)
+                            Spacer()
+                            Button("Ajouter des dossiers…") {
+                                addPaths(app.chooseRulePaths(), to: name)
+                            }
+                        }
+                        ForEach(rules) { rule in
+                            HStack {
+                                Image(systemName: "folder").foregroundStyle(.blue)
+                                Text(rule.path).font(.callout).textSelection(.enabled)
+                                Spacer()
+                                Button("Modifier") { client = rule.client; path = rule.path; selectedPaths = []; editingID = rule.id }
+                                Button(role: .destructive) { app.settings.rules.removeAll { $0.id == rule.id }; app.save() } label: { Image(systemName: "trash") }.help("Supprimer l’affectation")
+                            }
+                        }
                     }.padding(18).card()
                 }
                 if app.settings.rules.isEmpty { ContentUnavailableView("Aucun client configuré", systemImage: "person.2", description: Text("Les consommations apparaissent sous « Non affecté » jusqu’à l’ajout d’une règle.")) }
@@ -205,7 +264,7 @@ struct ClientsView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Dossiers détectés").font(.headline)
                         ForEach(paths, id: \.self) { folder in
-                            HStack { Text(folder).font(.callout).textSelection(.enabled); Spacer(); Button("Affecter") { path = folder } }
+                            HStack { Text(folder).font(.callout).textSelection(.enabled); Spacer(); Button("Affecter") { path = folder; selectedPaths = []; editingID = nil } }
                         }
                     }.padding(22).card()
                 }

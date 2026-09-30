@@ -6,7 +6,7 @@ Application macOS native en SwiftUI pour suivre les tokens des sessions Codex lo
 
 Ouvrir **Codex Meter.app**. Le premier lancement lit les sessions existantes ; les suivants reprennent depuis le cache.
 
-1. Dans **Clients**, associer un dossier de projet à un client. Les règles s’appliquent aussi à l’historique ; la règle dont le chemin est le plus précis gagne.
+1. Dans **Clients**, créer un client et lui affecter un ou plusieurs dossiers de projet. Il est aussi possible d’ajouter des dossiers depuis la fiche d’un client existant. Les règles s’appliquent aussi à l’historique ; la règle dont le chemin est le plus précis gagne.
 2. Dans **Vue d’ensemble**, choisir une période et une répartition par client, dépôt/dossier ou modèle. La recherche filtre également l’export.
 3. Facultativement, dans **Réglages**, ajouter les modèles détectés et saisir une grille en euros par million de tokens, puis enregistrer les tarifs. Zéro est une valeur explicite ; l’absence de tarif affiche un tiret.
 4. **Exporter CSV** enregistre les événements de la sélection, avec dates UTC, client, dossier, dépôt, modèle, identifiants et compteurs. Les jours du graphique utilisent le fuseau horaire du Mac.

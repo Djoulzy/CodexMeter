@@ -48,6 +48,24 @@ final class ScannerTests: XCTestCase {
         XCTAssertEqual(ClientRule.client(for: event, rules: rules), "Specific")
         XCTAssertFalse(ClientRule(client: "x", path: "/projects/client").matches("/projects/client-other"))
     }
+    func testSeveralFoldersCanBelongToTheSameClient() {
+        let rules = [
+            ClientRule(client: "Acme", path: "/projects/website"),
+            ClientRule(client: "Acme", path: "/work/mobile"),
+            ClientRule(client: "Other", path: "/work/mobile/private")
+        ]
+        var p = parser()
+        let original = p.consume(legacy(usage(1, 1)), origin: "fixture")!
+        func event(in folder: String) -> Consumption {
+            Consumption(id: original.id, timestamp: original.timestamp, sessionID: original.sessionID,
+                        turnID: original.turnID, cwd: folder, repository: "", model: original.model,
+                        source: original.source, isSubagent: original.isSubagent, usage: original.usage,
+                        estimated: original.estimated, origin: original.origin)
+        }
+        XCTAssertEqual(ClientRule.client(for: event(in: "/projects/website/src"), rules: rules), "Acme")
+        XCTAssertEqual(ClientRule.client(for: event(in: "/work/mobile/app"), rules: rules), "Acme")
+        XCTAssertEqual(ClientRule.client(for: event(in: "/work/mobile/private"), rules: rules), "Other")
+    }
     func testCSVQuotesAndNeutralizesFormulaCells() {
         var p = parser()
         let event = p.consume(legacy(usage(1, 1)), origin: "fixture")!
